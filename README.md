@@ -1,54 +1,24 @@
 # Experiments with ZeroMQ
 
-## Local test on MacOS X
-
 ```sh
-❯ go test -bench=. -benchmem ./...
+❯ go test -bench=. -benchmem ./*.go 
 goos: darwin
 goarch: amd64
-pkg: github.com/leki75/zmqtest
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
-BenchmarkGoChannel_recv-12            	 4762549	       255.5 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGoChannel_send-12            	 6585050	       176.5 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCzmqSocket_recv_inproc-12    	 1387824	       798.6 ns/op	     128 B/op	       7 allocs/op
-BenchmarkCzmqSocket_send_inproc-12    	 1389370	       880.0 ns/op	     127 B/op	       6 allocs/op
-BenchmarkCzmqSocket_recv_ipc-12       	 1415056	       851.6 ns/op	     128 B/op	       7 allocs/op
-BenchmarkCzmqSocket_send_ipc-12       	 1748611	       839.0 ns/op	     127 B/op	       6 allocs/op
-BenchmarkCzmqSocket_recv_tcp-12       	 1356379	       957.0 ns/op	     128 B/op	       7 allocs/op
-BenchmarkCzmqSocket_send_tcp-12       	 1280512	       868.4 ns/op	     126 B/op	       6 allocs/op
-BenchmarkZmq4Socket_recv_inproc-12    	 1649125	       647.5 ns/op	     304 B/op	       6 allocs/op
-BenchmarkZmq4Socket_send_inproc-12    	 1985466	       681.0 ns/op	     303 B/op	       5 allocs/op
-BenchmarkZmq4Socket_recv_ipc-12       	 1854087	       715.4 ns/op	     304 B/op	       6 allocs/op
-BenchmarkZmq4Socket_send_ipc-12       	 2020258	       577.6 ns/op	     303 B/op	       5 allocs/op
-BenchmarkZmq4Socket_recv_tcp-12       	 1431608	       844.2 ns/op	     305 B/op	       6 allocs/op
-BenchmarkZmq4Socket_send_tcp-12       	 1455072	       787.1 ns/op	     299 B/op	       5 allocs/op
+BenchmarkGoChannel_recv-12       2114181               587.1 ns/op             0 B/op          0 allocs/op
+BenchmarkGoChannel_send-12       2929124               407.9 ns/op             0 B/op          0 allocs/op
+BenchmarkCzmqSocket/Recv-Inproc-12                629619              1633 ns/op             128 B/op          7 allocs/op
+BenchmarkCzmqSocket/Send-Inproc-12               1275244               937.4 ns/op            51 B/op          4 allocs/op
+BenchmarkCzmqSocket/Recv-IPC-12                   625003              1733 ns/op             128 B/op          7 allocs/op
+BenchmarkCzmqSocket/Send-IPC-12                  1277078               944.8 ns/op            59 B/op          5 allocs/op
+BenchmarkCzmqSocket/Recv-TCP-12                   626035              1945 ns/op             129 B/op          7 allocs/op
+BenchmarkCzmqSocket/Send-TCP-12                  1254134               957.5 ns/op            61 B/op          5 allocs/op
+BenchmarkZmq4Socket/Recv-Inproc-12                768044              1400 ns/op             176 B/op          4 allocs/op
+BenchmarkZmq4Socket/Send-Inproc-12                884361              1430 ns/op             175 B/op          3 allocs/op
+BenchmarkZmq4Socket/Recv-IPC-12                   822829              1325 ns/op             176 B/op          4 allocs/op
+BenchmarkZmq4Socket/Send-IPC-12                   910080              1279 ns/op             175 B/op          3 allocs/op
+BenchmarkZmq4Socket/Recv-TCP-12                   896509              1357 ns/op             176 B/op          4 allocs/op
+BenchmarkZmq4Socket/Send-TCP-12                  1000000              1422 ns/op             171 B/op          3 allocs/op
 PASS
-ok  	github.com/leki75/zmqtest	28.108s
-```
-
-## Docker test on MacOS X, Linux container
-
-```sh
-❯ docker build -t zmqtest .
-❯ docker run -t zmqtest
-goos: linux
-goarch: amd64
-pkg: github.com/leki75/zmqtest
-cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
-BenchmarkGoChannel_recv-6           	  464943	      2297 ns/op	       0 B/op	       0 allocs/op
-BenchmarkGoChannel_send-6           	  489412	      2198 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCzmqSocket_recv_inproc-6   	 1539637	       781.0 ns/op	     128 B/op	       7 allocs/op
-BenchmarkCzmqSocket_send_inproc-6   	 1523367	       795.1 ns/op	     127 B/op	       6 allocs/op
-BenchmarkCzmqSocket_recv_ipc-6      	 1573741	       763.7 ns/op	     128 B/op	       7 allocs/op
-BenchmarkCzmqSocket_send_ipc-6      	 1562056	       773.0 ns/op	     127 B/op	       6 allocs/op
-BenchmarkCzmqSocket_recv_tcp-6      	 1233158	       986.8 ns/op	     130 B/op	       7 allocs/op
-BenchmarkCzmqSocket_send_tcp-6      	 1501854	       883.3 ns/op	     121 B/op	       6 allocs/op
-BenchmarkZmq4Socket_recv_inproc-6   	 1675046	       715.2 ns/op	     304 B/op	       6 allocs/op
-BenchmarkZmq4Socket_send_inproc-6   	 1653790	       730.0 ns/op	     303 B/op	       5 allocs/op
-BenchmarkZmq4Socket_recv_ipc-6      	 1676445	       699.0 ns/op	     304 B/op	       6 allocs/op
-BenchmarkZmq4Socket_send_ipc-6      	 1733248	       687.5 ns/op	     303 B/op	       5 allocs/op
-BenchmarkZmq4Socket_recv_tcp-6      	 1727510	       674.2 ns/op	     305 B/op	       6 allocs/op
-BenchmarkZmq4Socket_send_tcp-6      	 1791862	       672.3 ns/op	     300 B/op	       5 allocs/op
-PASS
-ok  	github.com/leki75/zmqtest	26.063s
+ok      command-line-arguments  22.957s
 ```
