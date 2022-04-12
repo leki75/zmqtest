@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/leki75/zmqtest/common"
@@ -12,7 +11,7 @@ import (
 
 func BenchmarkGoczmq(b *testing.B) {
 	directions := map[string]common.TestFunc{
-		"Pub": benchGoczmqPub,
+		// "Pub": benchGoczmqPub,
 		"Sub": benchGoczmqSub,
 	}
 
@@ -24,111 +23,171 @@ func BenchmarkGoczmq(b *testing.B) {
 }
 
 func benchGoczmqPub(b *testing.B, num int) func(*testing.B) {
+	port := fmt.Sprintf("%d", num+10000)
+
 	return func(b *testing.B) {
 		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ready := make(chan struct{}, num)
 
-		pubSock := goczmq.NewSock(goczmq.Pub)
-		defer pubSock.Destroy()
-		if _, err := pubSock.Bind(fmt.Sprintf("tcp://*:%d", num+5555)); err != nil {
-			b.Fatal(err)
-		}
-
-		wg := sync.WaitGroup{}
-		wg.Add(num)
+		// start subscribers
 		for i := 0; i < num; i++ {
 			go func() {
-				subSock := goczmq.NewSock(goczmq.Sub)
-				defer subSock.Destroy()
-
-				if err := subSock.Connect(fmt.Sprintf("tcp://127.0.0.1:%d", num+5555)); err != nil {
+				// connect and subscribe to the publisher
+				subSock, err := goczmq.NewSub("tcp://127.0.0.1:"+port, "")
+				if err != nil {
 					panic(err)
 				}
-				wg.Done()
+				defer subSock.Destroy()
+
+				if buf, n, err := subSock.RecvFrame(); err != nil {
+					panic(fmt.Sprintf("start: %v %v %v", buf, n, err))
+				}
+				ready <- struct{}{}
 
 				for {
 					if err := ctx.Err(); err != nil {
-						return
+						break
 					}
-					if _, err := subSock.RecvMessage(); err != nil {
-						panic(err)
+					if buf, n, err := subSock.RecvFrame(); err != nil {
+						panic(fmt.Sprintf("loop: %v %v %v", buf, n, err))
 					}
 				}
+				ready <- struct{}{}
 			}()
 		}
-		wg.Wait()
+
+		// start publisher
+		pubSock, err := goczmq.NewPub("tcp://*:" + port)
+		if err != nil {
+			b.Fatal(err)
+		}
+		defer pubSock.Destroy()
+
+		// make sure that all subscribers are ready
+		for i := 0; i < num; {
+			if err := pubSock.SendFrame(common.Msg, 0); err != nil {
+				b.Fatal(err)
+			}
+
+			select {
+			case <-ready:
+				i++
+			default:
+			}
+		}
+
+		defer func() {
+			cancel()
+			// make sure that all subscribers are logged out
+			for i := 0; i < num; {
+				if err := pubSock.SendFrame(common.Msg, 0); err != nil {
+					b.Fatal(err)
+				}
+
+				select {
+				case <-ready:
+					i++
+				default:
+				}
+			}
+		}()
+
+		b.ResetTimer()
 
 		sum := uint64(0)
-		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			if err := pubSock.SendFrame(common.Msg, 0); err != nil {
 				b.Fatal(err)
 			}
 			sum += uint64(len(common.Msg))
 		}
-		b.ReportMetric(float64(sum), "bytes/op")
+		b.ReportMetric(float64(sum)/float64(b.N), "bytes/op")
 	}
 }
 
 func benchGoczmqSub(b *testing.B, num int) func(*testing.B) {
+	port := fmt.Sprintf("%d", num+10000)
+
 	return func(b *testing.B) {
 		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		ready := make(chan struct{})
-		wg := sync.WaitGroup{}
-		wg.Add(1)
+		ready := make(chan struct{}, num)
 
 		go func() {
 			pubSock := goczmq.NewSock(goczmq.Pub)
 			defer pubSock.Destroy()
-			if _, err := pubSock.Bind(fmt.Sprintf("tcp://*:%d", num+5555)); err != nil {
+			if _, err := pubSock.Bind("tcp://*:" + port); err != nil {
 				panic(err)
 			}
-			wg.Done()
 
-			<-ready
+			// make sure that all subscribers are ready
+			for i := 0; i < num; {
+				if err := pubSock.SendFrame(common.Msg, 0); err != nil {
+					panic(err)
+				}
+
+				select {
+				case <-ready:
+					i++
+				default:
+				}
+			}
+
 			for {
 				if err := ctx.Err(); err != nil {
-					return
+					break
 				}
 				if err := pubSock.SendFrame(common.Msg, 0); err != nil {
 					panic(err)
 				}
 			}
-		}()
-		wg.Wait()
 
-		for i := 0; i < num-1; i++ {
-			go func() {
-				subSock := goczmq.NewSock(goczmq.Sub)
-				defer subSock.Destroy()
-				if err := subSock.Connect(fmt.Sprintf("tcp://127.0.0.1:%d", num+5555)); err != nil {
+			// make sure that all subscribers are logged out
+			for i := 0; i < num-1; {
+				if err := pubSock.SendFrame(common.Msg, 0); err != nil {
 					panic(err)
 				}
 
+				select {
+				case <-ready:
+					i++
+				default:
+				}
+			}
+		}()
+
+		for i := 0; i < num-1; i++ {
+			go func() {
+				subSock, err := goczmq.NewSub("tcp://127.0.0.1:"+port, "")
+				if err != nil {
+					panic(err)
+				}
+				defer subSock.Destroy()
+
+				if buf, n, err := subSock.RecvFrame(); err != nil {
+					panic(fmt.Sprintf("start: %v %v %v", buf, n, err))
+				}
+				ready <- struct{}{}
+
 				for {
 					if err := ctx.Err(); err != nil {
-						return
+						break
 					}
-					if _, _, err := subSock.RecvFrame(); err != nil {
-						panic(err)
+					if buf, n, err := subSock.RecvFrame(); err != nil {
+						panic(fmt.Sprintf("loop: %v %v %v", buf, n, err))
 					}
 				}
+				ready <- struct{}{}
 			}()
 		}
 
-		sock := goczmq.NewSock(goczmq.Sub)
+		sock, err := goczmq.NewSub("tcp://127.0.0.1:"+port, "")
+		if err != nil {
+			panic(err)
+		}
 		defer sock.Destroy()
 
-		if err := sock.Connect(fmt.Sprintf("tcp://127.0.0.1:%d", num+5555)); err != nil {
-			b.Fatal(err)
-		}
-
-		sum := 0
-		ready <- struct{}{}
-
 		b.ResetTimer()
+		sum := 0
 		for i := 0; i < b.N; i++ {
 			buf, _, err := sock.RecvFrame()
 			if err != nil {
@@ -137,5 +196,8 @@ func benchGoczmqSub(b *testing.B, num int) func(*testing.B) {
 			sum += len(buf)
 		}
 		b.ReportMetric(float64(sum), "bytes/op")
+
+		cancel()
+		ready <- struct{}{}
 	}
 }
